@@ -626,7 +626,10 @@ async function getTransactions(req: FastifyRequest, reply: FastifyReply<ServerRe
     }
 
     let itemDetails: ItemDetail[] = [];
+    const tasks: Promise<ItemDetail>[] = [];
     for (const item of items) {
+        tasks.push(new Promise<ItemDetail>(async(resolve, reject) => {
+
         const tasks1: Promise<any>[] = [];
         tasks1.push(getCategoryByID(db, item.category_id));
         tasks1.push(getUserSimpleByID(db, item.seller_id));
@@ -713,10 +716,11 @@ async function getTransactions(req: FastifyRequest, reply: FastifyReply<ServerRe
             itemDetail.transaction_evidence_id = transactionEvidence.id;
             itemDetail.transaction_evidence_status = transactionEvidence.status;
         }
-
-        itemDetails.push(itemDetail);
-
+        resolve(itemDetail);
+        }));
     }
+    const result = await Promise.all(tasks);
+    itemDetails = result;
 
     await db.commit();
 
