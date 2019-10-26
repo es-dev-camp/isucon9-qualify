@@ -627,7 +627,13 @@ async function getTransactions(req: FastifyRequest, reply: FastifyReply<ServerRe
 
     let itemDetails: ItemDetail[] = [];
     for (const item of items) {
-        const category = await getCategoryByID(db, item.category_id);
+        const tasks1: Promise<any>[] = [];
+        tasks1.push(getCategoryByID(db, item.category_id));
+        tasks1.push(getUserSimpleByID(db, item.seller_id));
+        const result1 = await Promise.all(tasks1);
+        const category = result1[0];
+        const seller = result1[1];
+
         if (category === null) {
             replyError(reply, "category not found", 404)
             await db.rollback();
@@ -635,7 +641,6 @@ async function getTransactions(req: FastifyRequest, reply: FastifyReply<ServerRe
             return;
         }
 
-        const seller = await getUserSimpleByID(db, item.seller_id);
         if (seller === null) {
             replyError(reply, "seller not found", 404)
             await db.rollback();
