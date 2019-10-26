@@ -500,33 +500,44 @@ async function getNewCategoryItems(req: FastifyRequest, reply: FastifyReply<Serv
 
     let itemSimples: ItemSimple[] = [];
 
+    const tasks: Promise<ItemSimple>[] = [];
     for (const item of items) {
-        const seller = await getUserSimpleByID(db, item.seller_id);
-        if (seller === null) {
-            replyError(reply, "seller not found", 404)
-            await db.release();
-            return;
-        }
-        const category = await getCategoryByID(db, item.category_id);
-        if (category === null) {
-            replyError(reply, "category not found", 404)
-            await db.release();
-            return;
-        }
-
-        itemSimples.push({
-            id: item.id,
-            seller_id: item.seller_id,
-            seller: seller,
-            status: item.status,
-            name: item.name,
-            price: item.price,
-            image_url: getImageURL(item.image_name),
-            category_id: item.category_id,
-            category: category,
-            created_at: item.created_at.getTime(),
-        });
+        tasks.push(new Promise<ItemSimple>(async (resolve, reject) => {
+            const seller = await getUserSimpleByID(db, item.seller_id);
+            if (seller === null) {
+                reject("seller not found");
+                replyError(reply, "seller not found", 404)
+                await db.release();
+                return;
+            }
+            const category = await getCategoryByID(db, item.category_id);
+            if (category === null) {
+                reject("category not found");
+                return;
+            }
+            resolve({
+                id: item.id,
+                seller_id: item.seller_id,
+                seller: seller,
+                status: item.status,
+                name: item.name,
+                price: item.price,
+                image_url: getImageURL(item.image_name),
+                category_id: item.category_id,
+                category: category,
+                created_at: item.created_at.getTime(),
+            });
+        }));
     }
+    const result = await Promise.all(tasks).catch(async err => {
+        replyError(reply, err, 404)
+        await db.release();
+        return null;
+    });
+    if (!result) {
+        return;
+    }
+    itemSimples.push(...result);
 
     let hasNext = false;
     if (itemSimples.length > ItemsPerPage) {
