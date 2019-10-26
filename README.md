@@ -143,3 +143,5 @@ MySQL 5.7および8.0にて動作確認しています。
 
 - なんちゃって個人情報 http://kazina.com/dummy/
 - 椅子画像提供 941-san https://twitter.com/941/status/1157193422127505412
+
+hoge
