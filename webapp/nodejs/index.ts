@@ -54,8 +54,8 @@ declare module "fastify" {
 
 // =============================================
 
-const DefaultPaymentServiceURL = "http://localhost:5555";
-const DefaultShipmentServiceURL = "http://localhost:7000";
+const DefaultPaymentServiceURL = "http://isu-003.knhr-surprise.de:5555";
+const DefaultShipmentServiceURL = "http://isu-003.knhr-surprise.de:7000";
 const ItemMinPrice = 100;
 const ItemMaxPrice = 1000000;
 const ItemPriceErrMsg =
@@ -2132,7 +2132,7 @@ async function getLoginUser(req: FastifyRequest, db: MySQLQueryable): Promise<Us
 function getSession(req: FastifyRequest) {
 }
 
-fastify.listen(8000, (err, _address) => {
+fastify.listen(8000, '::', (err, _address) => {
     if (err) {
         throw new TraceError("Failed to listening", err);
     }
