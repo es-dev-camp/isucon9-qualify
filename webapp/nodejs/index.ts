@@ -373,13 +373,32 @@ async function getNewItems(req: FastifyRequest, reply: FastifyReply<ServerRespon
         }
     }
 
+    let userIds: number[] = [];
+    for (const item of items) {
+        const id = item.seller_id;
+        userIds.push(id);
+    }
+
+    let users: { [id: number] : UserSimple} = {};
+    if (userIds.length > 0) {
+        const [rows,] = await db.query("SELECT * FROM `users` WHERE `id` IN (?)", [userIds]);
+            for (const row of rows) {
+                const user = row as User;
+                const userSimple: UserSimple = {
+                    id: user.id,
+                    account_name: user.account_name,
+                    num_sell_items: user.num_sell_items,
+                };
+                users[user.id] = userSimple;
+        }
+    }
+
     let itemSimples: ItemSimple[] = [];
 
     for (const item of items) {
-        const seller = await getUserSimpleByID(db, item.seller_id);
+        const seller = users[item.seller_id];
         if (seller === null) {
             replyError(reply, "seller not found", 404)
-            await db.release();
             return;
         }
         const category = await getCategoryByID(db, item.category_id);
