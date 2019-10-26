@@ -2190,8 +2190,15 @@ async function getUserSimpleByID(db: MySQLQueryable, userID: number): Promise<Us
     return null;
 }
 
+const categoriesCache: {[categoryID: number]: MySQLResultRows} = {};
 async function getCategoryByID(db: MySQLQueryable, categoryId: number): Promise<Category | null> {
-    const [rows,] = await db.query("SELECT * FROM `categories` WHERE `id` = ?", [categoryId]);
+    let rows: MySQLResultRows;
+    if (categoriesCache[categoryId]) {
+        rows = categoriesCache[categoryId];
+    } else {
+        [rows,] = await db.query("SELECT * FROM `categories` WHERE `id` = ?", [categoryId]);
+        categoriesCache[categoryId] = rows;
+    }
     for (const row of rows) {
         const category = row as Category;
         if (category.parent_id !== undefined && category.parent_id != 0) {
