@@ -626,8 +626,17 @@ async function getTransactions(req: FastifyRequest, reply: FastifyReply<ServerRe
     }
 
     let itemDetails: ItemDetail[] = [];
+    const tasks: Promise<ItemDetail>[] = [];
     for (const item of items) {
-        const category = await getCategoryByID(db, item.category_id);
+        tasks.push(new Promise<ItemDetail>(async(resolve, reject) => {
+
+        const tasks1: Promise<any>[] = [];
+        tasks1.push(getCategoryByID(db, item.category_id));
+        tasks1.push(getUserSimpleByID(db, item.seller_id));
+        const result1 = await Promise.all(tasks1);
+        const category = result1[0];
+        const seller = result1[1];
+
         if (category === null) {
             replyError(reply, "category not found", 404)
             await db.rollback();
@@ -635,7 +644,6 @@ async function getTransactions(req: FastifyRequest, reply: FastifyReply<ServerRe
             return;
         }
 
-        const seller = await getUserSimpleByID(db, item.seller_id);
         if (seller === null) {
             replyError(reply, "seller not found", 404)
             await db.rollback();
@@ -708,10 +716,11 @@ async function getTransactions(req: FastifyRequest, reply: FastifyReply<ServerRe
             itemDetail.transaction_evidence_id = transactionEvidence.id;
             itemDetail.transaction_evidence_status = transactionEvidence.status;
         }
-
-        itemDetails.push(itemDetail);
-
+        resolve(itemDetail);
+        }));
     }
+    const result = await Promise.all(tasks);
+    itemDetails = result;
 
     await db.commit();
 
@@ -1133,20 +1142,24 @@ async function postBuy(req: FastifyRequest, reply: FastifyReply<ServerResponse>)
     )
 
     try {
-        const scr = await shipmentCreate(await getShipmentServiceURL(db), {
+        const tasks: Promise<any>[] = [];
+        tasks.push(shipmentCreate(await getShipmentServiceURL(db), {
             to_address: buyer.address,
             to_name: buyer.account_name,
             from_address: seller.address,
             from_name: seller.account_name,
-        });
+        }));
 
         try {
-            const pstr = await paymentToken(await getPaymentServiceURL(db), {
+            tasks.push(paymentToken(await getPaymentServiceURL(db), {
                 shop_id: PaymentServiceIsucariShopID.toString(),
                 token: req.body.token,
                 api_key: PaymentServiceIsucariAPIKey,
                 price: targetItem.price,
-            });
+            }))
+            const result = await Promise.all(tasks);
+            const scr = result[0];
+            const pstr = result[1];
 
             if (pstr.status === "invalid") {
                 replyError(reply, "カード情報に誤りがあります", 400);
