@@ -1133,20 +1133,24 @@ async function postBuy(req: FastifyRequest, reply: FastifyReply<ServerResponse>)
     )
 
     try {
-        const scr = await shipmentCreate(await getShipmentServiceURL(db), {
+        const tasks: Promise<any>[] = [];
+        tasks.push(shipmentCreate(await getShipmentServiceURL(db), {
             to_address: buyer.address,
             to_name: buyer.account_name,
             from_address: seller.address,
             from_name: seller.account_name,
-        });
+        }));
 
         try {
-            const pstr = await paymentToken(await getPaymentServiceURL(db), {
+            tasks.push(paymentToken(await getPaymentServiceURL(db), {
                 shop_id: PaymentServiceIsucariShopID.toString(),
                 token: req.body.token,
                 api_key: PaymentServiceIsucariAPIKey,
                 price: targetItem.price,
-            });
+            }))
+            const result = await Promise.all(tasks);
+            const scr = result[0];
+            const pstr = result[1];
 
             if (pstr.status === "invalid") {
                 replyError(reply, "カード情報に誤りがあります", 400);
