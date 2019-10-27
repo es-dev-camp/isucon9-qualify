@@ -374,34 +374,42 @@ async function getNewItems(req: FastifyRequest, reply: FastifyReply<ServerRespon
     }
 
     let itemSimples: ItemSimple[] = [];
-
+    const tasks: Promise<ItemSimple>[] = [];
     for (const item of items) {
-        const seller = await getUserSimpleByID(db, item.seller_id);
-        if (seller === null) {
-            replyError(reply, "seller not found", 404)
-            await db.release();
-            return;
-        }
-        const category = await getCategoryByID(db, item.category_id);
-        if (category === null) {
-            replyError(reply, "category not found", 404)
-            await db.release();
-            return;
-        }
+        tasks.push(new Promise<ItemSimple>(async (resolve, reject) => {
+            const seller = await getUserSimpleByID(db, item.seller_id);
+            if (seller === null) {
+                reject("seller not found");
+                return;
+            }
+            const category = await getCategoryByID(db, item.category_id);
+            if (category === null) {
+                reject("category not found");
+                return;
+            }
+            resolve({
+                id: item.id,
+                seller_id: item.seller_id,
+                seller: seller,
+                status: item.status,
+                name: item.name,
+                price: item.price,
+                image_url: getImageURL(item.image_name),
+                category_id: item.category_id,
+                category: category,
+                created_at: item.created_at.getTime(),
+            })
 
-        itemSimples.push({
-            id: item.id,
-            seller_id: item.seller_id,
-            seller: seller,
-            status: item.status,
-            name: item.name,
-            price: item.price,
-            image_url: getImageURL(item.image_name),
-            category_id: item.category_id,
-            category: category,
-            created_at: item.created_at.getTime(),
-        });
+        }));
     }
+    const result = await Promise.all(tasks).catch(err => {
+    });
+    if (!result) {
+        replyError(reply, "category not found", 404)
+        await db.release();
+        return;
+    }
+    itemSimples.push(...result);
 
     let hasNext = false;
     if (itemSimples.length > ItemsPerPage) {
@@ -500,33 +508,44 @@ async function getNewCategoryItems(req: FastifyRequest, reply: FastifyReply<Serv
 
     let itemSimples: ItemSimple[] = [];
 
+    const tasks: Promise<ItemSimple>[] = [];
     for (const item of items) {
-        const seller = await getUserSimpleByID(db, item.seller_id);
-        if (seller === null) {
-            replyError(reply, "seller not found", 404)
-            await db.release();
-            return;
-        }
-        const category = await getCategoryByID(db, item.category_id);
-        if (category === null) {
-            replyError(reply, "category not found", 404)
-            await db.release();
-            return;
-        }
-
-        itemSimples.push({
-            id: item.id,
-            seller_id: item.seller_id,
-            seller: seller,
-            status: item.status,
-            name: item.name,
-            price: item.price,
-            image_url: getImageURL(item.image_name),
-            category_id: item.category_id,
-            category: category,
-            created_at: item.created_at.getTime(),
-        });
+        tasks.push(new Promise<ItemSimple>(async (resolve, reject) => {
+            const seller = await getUserSimpleByID(db, item.seller_id);
+            if (seller === null) {
+                reject("seller not found");
+                replyError(reply, "seller not found", 404)
+                await db.release();
+                return;
+            }
+            const category = await getCategoryByID(db, item.category_id);
+            if (category === null) {
+                reject("category not found");
+                return;
+            }
+            resolve({
+                id: item.id,
+                seller_id: item.seller_id,
+                seller: seller,
+                status: item.status,
+                name: item.name,
+                price: item.price,
+                image_url: getImageURL(item.image_name),
+                category_id: item.category_id,
+                category: category,
+                created_at: item.created_at.getTime(),
+            });
+        }));
     }
+    const result = await Promise.all(tasks).catch(async err => {
+        replyError(reply, err, 404)
+        await db.release();
+        return null;
+    });
+    if (!result) {
+        return;
+    }
+    itemSimples.push(...result);
 
     let hasNext = false;
     if (itemSimples.length > ItemsPerPage) {
@@ -2171,8 +2190,15 @@ async function getUserSimpleByID(db: MySQLQueryable, userID: number): Promise<Us
     return null;
 }
 
+const categoriesCache: {[categoryID: number]: MySQLResultRows} = {};
 async function getCategoryByID(db: MySQLQueryable, categoryId: number): Promise<Category | null> {
-    const [rows,] = await db.query("SELECT * FROM `categories` WHERE `id` = ?", [categoryId]);
+    let rows: MySQLResultRows;
+    if (categoriesCache[categoryId]) {
+        rows = categoriesCache[categoryId];
+    } else {
+        [rows,] = await db.query("SELECT * FROM `categories` WHERE `id` = ?", [categoryId]);
+        categoriesCache[categoryId] = rows;
+    }
     for (const row of rows) {
         const category = row as Category;
         if (category.parent_id !== undefined && category.parent_id != 0) {
